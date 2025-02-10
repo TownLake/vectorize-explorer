@@ -65,22 +65,6 @@ export default function Home() {
         </h1>
 
         <div className="relative w-full mb-6">
-          <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-            <svg 
-              xmlns="http://www.w3.org/2000/svg" 
-              className="h-5 w-5 text-[#ffb07c]/50" 
-              fill="none" 
-              viewBox="0 0 24 24" 
-              stroke="currentColor"
-            >
-              <path 
-                strokeLinecap="round" 
-                strokeLinejoin="round" 
-                strokeWidth={2} 
-                d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" 
-              />
-            </svg>
-          </div>
           <input
             type="text"
             placeholder="Search your vectors..."
@@ -89,44 +73,35 @@ export default function Home() {
             onKeyDown={(e) => {
               if (e.key === "Enter") handleSearch();
             }}
-            className="w-full p-3 pl-12 bg-[#2a2f45] border border-white/10 rounded-lg text-white placeholder-[#ffb07c]/50 focus:outline-none focus:ring-2 focus:ring-[#ffb07c]/20 transition-all duration-300"
+            className="w-full p-3 pl-4 pr-12 bg-[#2a2f45] border border-white/10 rounded-lg text-white placeholder-[#ffb07c]/50 focus:outline-none focus:ring-2 focus:ring-[#ffb07c]/20 transition-all duration-300"
           />
-          {query && (
-            <button 
-              onClick={() => setQuery("")} 
-              className="absolute inset-y-0 right-0 pr-4 flex items-center text-[#ffb07c]/50 hover:text-[#ffb07c]"
+          <button 
+            onClick={handleSearch}
+            className="absolute inset-y-0 right-0 pr-4 flex items-center text-[#ffb07c]/50 hover:text-[#ffb07c] transition-colors duration-300"
+          >
+            <svg 
+              xmlns="http://www.w3.org/2000/svg" 
+              className="h-5 w-5" 
+              viewBox="0 0 24 24" 
+              fill="none" 
+              stroke="currentColor"
             >
-              <svg 
-                xmlns="http://www.w3.org/2000/svg" 
-                className="h-5 w-5" 
-                fill="none" 
-                viewBox="0 0 24 24" 
-                stroke="currentColor"
-              >
-                <path 
-                  strokeLinecap="round" 
-                  strokeLinejoin="round" 
-                  strokeWidth={2} 
-                  d="M6 18L18 6M6 6l12 12" 
-                />
-              </svg>
-            </button>
-          )}
+              <circle cx="11" cy="11" r="8" strokeWidth="2"/>
+              <path d="M21 21l-4.35-4.35" strokeWidth="2" strokeLinecap="round"/>
+              <path d="M11 8v6M8 11h6" strokeWidth="2" strokeLinecap="round"/>
+            </svg>
+          </button>
         </div>
 
-        <div className="flex space-x-4 mb-6">
-          <button
-            onClick={handleSearch}
-            className="flex-1 bg-[#2a2f45] hover:bg-[#3a3f55] text-[#ffb07c] py-3 rounded-lg transition-all duration-300"
+        <div className="flex justify-end mb-6">
+          <a
+            href="https://github.com/TownLake/vectorize-explorer"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="bg-[#2a2f45] hover:bg-[#3a3f55] text-[#ffb07c] px-6 py-3 rounded-lg transition-all duration-300"
           >
-            Search
-          </button>
-          <button
-            onClick={handleShowMetadata}
-            className="flex-1 bg-[#2a2f45] hover:bg-[#3a3f55] text-[#ffb07c] py-3 rounded-lg transition-all duration-300"
-          >
-            Show Metadata
-          </button>
+            Help
+          </a>
         </div>
 
         {results.length > 0 && (
