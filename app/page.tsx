@@ -93,7 +93,13 @@ export default function Home() {
           </button>
         </div>
 
-        <div className="flex justify-end mb-6">
+        <div className="flex justify-end mb-6 space-x-4">
+          <button
+            onClick={handleShowMetadata}
+            className="bg-[#2a2f45] hover:bg-[#3a3f55] text-[#ffb07c] px-6 py-3 rounded-lg transition-all duration-300"
+          >
+            Show Metadata
+          </button>
           <a
             href="https://github.com/TownLake/vectorize-explorer"
             target="_blank"
