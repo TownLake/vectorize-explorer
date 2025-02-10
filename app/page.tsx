@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 
+/** Types for our data */
 type SearchResult = {
   title: string;
   url: string;
@@ -19,8 +20,27 @@ export default function Home() {
   const [metadata, setMetadata] = useState<MetadataItem[]>([]);
   const [showMetadata, setShowMetadata] = useState(false);
 
+  // Optional states for error and loading
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  /**
+   * Handle the main search flow:
+   * 1. Validate query
+   * 2. Post to /api/search
+   * 3. Update state with results or error
+   */
   const handleSearch = async () => {
-    if (!query.trim()) return;
+    // Reset error + set loading
+    setError("");
+    setLoading(true);
+
+    // Don’t search if the input is empty
+    if (!query.trim()) {
+      setLoading(false);
+      return;
+    }
+
     try {
       const res = await fetch("/api/search", {
         method: "POST",
@@ -28,19 +48,28 @@ export default function Home() {
         body: JSON.stringify({ query }),
       });
 
+      // If not ok, parse the error
       if (!res.ok) {
-        const errorText = await res.text();
-        console.error("Search error, response not OK:", errorText);
-        return;
+        const errorData = await res.json();
+        setError(errorData.error || "Unknown error occurred.");
+        setResults([]);
+      } else {
+        // Parse the successful result array
+        const data = (await res.json()) as SearchResult[];
+        setResults(data);
       }
-
-      const data = (await res.json()) as SearchResult[];
-      setResults(data);
-    } catch (err) {
+    } catch (err: any) {
       console.error("Search error:", err);
+      setError(err.message || "Request failed.");
+    } finally {
+      setLoading(false);
     }
   };
 
+  /**
+   * Handle fetching metadata from /api/metadata
+   * (this part is unchanged from your snippet)
+   */
   const handleShowMetadata = async () => {
     try {
       const res = await fetch("/api/metadata");
@@ -57,6 +86,9 @@ export default function Home() {
     }
   };
 
+  /**
+   * Render
+   */
   return (
     <main className="min-h-screen bg-[#1a1f35] flex items-center justify-center px-4 text-white">
       <div className="w-full max-w-2xl">
@@ -64,6 +96,7 @@ export default function Home() {
           What vectors do you need?
         </h1>
 
+        {/* Input + Search Button */}
         <div className="relative w-full mb-6">
           <input
             type="text"
@@ -75,24 +108,30 @@ export default function Home() {
             }}
             className="w-full p-3 pl-4 pr-12 bg-[#2a2f45] border border-white/10 rounded-lg text-white placeholder-[#ffb07c]/50 focus:outline-none focus:ring-2 focus:ring-[#ffb07c]/20 transition-all duration-300"
           />
-          <button 
+          <button
             onClick={handleSearch}
             className="absolute inset-y-0 right-0 pr-4 flex items-center text-[#ffb07c]/50 hover:text-[#ffb07c] transition-colors duration-300"
           >
-            <svg 
-              xmlns="http://www.w3.org/2000/svg" 
-              className="h-5 w-5" 
-              viewBox="0 0 24 24" 
-              fill="none" 
+            {/* Magnifying glass icon */}
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              className="h-5 w-5"
+              viewBox="0 0 24 24"
+              fill="none"
               stroke="currentColor"
             >
-              <circle cx="11" cy="11" r="8" strokeWidth="2"/>
-              <path d="M21 21l-4.35-4.35" strokeWidth="2" strokeLinecap="round"/>
-              <path d="M11 8v6M8 11h6" strokeWidth="2" strokeLinecap="round"/>
+              <circle cx="11" cy="11" r="8" strokeWidth="2" />
+              <path d="M21 21l-4.35-4.35" strokeWidth="2" strokeLinecap="round" />
+              <path d="M11 8v6M8 11h6" strokeWidth="2" strokeLinecap="round" />
             </svg>
           </button>
         </div>
 
+        {/* Loading and Error UI */}
+        {loading && <div className="mb-4 text-white/70">Searching...</div>}
+        {error && <div className="mb-4 text-red-400">{error}</div>}
+
+        {/* Buttons for showing metadata / help */}
         <div className="flex justify-end mb-6 space-x-4">
           <button
             onClick={handleShowMetadata}
@@ -110,13 +149,14 @@ export default function Home() {
           </a>
         </div>
 
+        {/* Display Search Results */}
         {results.length > 0 && (
           <div className="bg-[#2a2f45] rounded-lg p-6 mb-6">
             <h2 className="text-lg mb-4 text-[#ffb07c]">Search Results</h2>
             <div className="space-y-4">
               {results.map((item, index) => (
-                <div 
-                  key={index} 
+                <div
+                  key={index}
                   className="bg-[#3a3f55] p-4 rounded-lg hover:bg-[#4a4f65] transition-colors duration-300"
                 >
                   <a
@@ -136,6 +176,7 @@ export default function Home() {
           </div>
         )}
 
+        {/* Display Metadata Table */}
         {showMetadata && metadata.length > 0 && (
           <div className="bg-[#2a2f45] rounded-lg p-6">
             <h2 className="text-lg mb-4 text-[#ffb07c]">Metadata</h2>
@@ -149,8 +190,8 @@ export default function Home() {
                 </thead>
                 <tbody>
                   {metadata.map((item, index) => (
-                    <tr 
-                      key={index} 
+                    <tr
+                      key={index}
                       className="border-b border-white/10 last:border-b-0 hover:bg-[#3a3f55] transition-colors duration-300"
                     >
                       <td className="py-3 text-white/90">{item.title}</td>
