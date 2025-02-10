@@ -1,7 +1,7 @@
 // functions/search.ts
 
 /**
- * Minimal interface for the AI binding described in wrangler.toml:
+ * Minimal interface for the AI binding in wrangler.toml:
  * [ai]
  * binding = "AI"
  */
@@ -15,7 +15,7 @@ interface AI {
   }
   
   /**
-   * Minimal interface for the Vectorize binding described in wrangler.toml:
+   * Minimal interface for the Vectorize binding in wrangler.toml:
    * [[vectorize]]
    * binding = "VECTORIZE"
    * index_name = "blog-posts"
@@ -38,7 +38,7 @@ interface AI {
     }>;
   }
   
-  /** Environment bindings available in wrangler.toml */
+  /** Environment bindings from wrangler.toml */
   interface Env {
     AI: AI;
     VECTORIZE: VectorizeIndex;
@@ -53,13 +53,11 @@ interface AI {
   interface SearchResult {
     title: string;
     url: string;
-    score: string; // e.g. "0.1234" or "N/A"
+    score: string;
   }
   
-  /** 
-   * Cloudflare Pages Function context.
-   * You can import `ExecutionContext` from '@cloudflare/workers-types'
-   * if you want more robust type definitions. For now, this is minimal.
+  /**
+   * Cloudflare Pages Function context
    */
   interface PagesFunctionContext {
     request: Request;
@@ -70,16 +68,13 @@ interface AI {
     data: Record<string, unknown>;
   }
   
-  /**
-   * Handles POST requests to /search
-   */
   export async function onRequestPost(
     context: PagesFunctionContext
   ): Promise<Response> {
     const { request, env } = context;
   
     try {
-      // 1) Parse the incoming JSON body
+      // 1) Parse JSON body
       const body = (await request.json()) as SearchRequestBody;
       const query = body.query?.trim() || "";
   
@@ -90,8 +85,7 @@ interface AI {
         });
       }
   
-      // 2) Generate embedding using the AI binding
-      //    (Model name is just an example; adjust if you’re using a different model.)
+      // 2) Create embedding via AI binding
       const embeddingResponse = await env.AI.run("@cf/baai/bge-base-en-v1.5", {
         text: query,
       });
@@ -104,9 +98,9 @@ interface AI {
         throw new Error("Failed to generate embedding");
       }
   
-      const queryVector = embeddingResponse.data[0]; // The embedding array
+      const queryVector = embeddingResponse.data[0];
   
-      // 3) Query your Vectorize index
+      // 3) Query Vectorize
       const searchResult = await env.VECTORIZE.query(queryVector, {
         topK: 5,
         returnMetadata: "all",
@@ -117,30 +111,24 @@ interface AI {
         !Array.isArray(searchResult.matches) ||
         searchResult.matches.length === 0
       ) {
-        // No matches? Return an empty array
         return new Response(JSON.stringify([]), {
           headers: { "Content-Type": "application/json" },
         });
       }
   
-      // 4) Shape the results to match your front-end needs
+      // 4) Shape the results
       const results: SearchResult[] = searchResult.matches
-        .filter(
-          (m) => m.metadata && m.metadata.title && m.metadata.slug
-        )
+        .filter((m) => m.metadata?.title && m.metadata?.slug)
         .map((match) => {
-          const title = match.metadata?.title ?? "Untitled";
-          const slug = match.metadata?.slug ?? "";
-          const scoreValue = match.score !== undefined ? match.score : null;
-  
+          const scoreValue = match.score ?? null;
           return {
-            title,
-            url: `https://blog.samrhea.com${slug}`,
+            title: match.metadata!.title,
+            url: `https://blog.samrhea.com${match.metadata!.slug}`,
             score: scoreValue !== null ? scoreValue.toFixed(4) : "N/A",
           };
         });
   
-      // 5) Return results
+      // 5) Return JSON
       return new Response(JSON.stringify(results), {
         headers: { "Content-Type": "application/json" },
       });
@@ -150,13 +138,10 @@ interface AI {
         errorMessage = error.message;
       }
   
-      return new Response(
-        JSON.stringify({ error: errorMessage }),
-        {
-          status: 500,
-          headers: { "Content-Type": "application/json" },
-        }
-      );
+      return new Response(JSON.stringify({ error: errorMessage }), {
+        status: 500,
+        headers: { "Content-Type": "application/json" },
+      });
     }
   }
   

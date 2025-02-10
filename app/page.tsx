@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 
+/** Types for our data */
 type SearchResult = {
   title: string;
   url: string;
@@ -23,24 +24,29 @@ export default function Home() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
+  /**
+   * Handle the main search flow, calling the Cloudflare Pages Function:
+   *   POST /search
+   */
   const handleSearch = async () => {
     setError("");
     setLoading(true);
-  
+
     if (!query.trim()) {
       setLoading(false);
       return;
     }
-  
+
     try {
-      const res = await fetch("/api/search", {
+      // POST to /search (Cloudflare Pages Function)
+      const res = await fetch("/search", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ query }),
       });
-  
+
       if (!res.ok) {
-        // Tell TS what shape we expect from the error response
+        // Expecting { error?: string } from our JSON error response
         const errorData = (await res.json()) as { error?: string };
         if (typeof errorData.error === "string") {
           setError(errorData.error);
@@ -49,6 +55,7 @@ export default function Home() {
         }
         setResults([]);
       } else {
+        // On success, parse the result array
         const data = (await res.json()) as SearchResult[];
         setResults(data);
       }
@@ -61,11 +68,14 @@ export default function Home() {
     } finally {
       setLoading(false);
     }
-  };  
+  };
 
+  /**
+   * Handle fetching metadata from /api/metadata (if you have a separate route).
+   * You can also migrate that to a Pages Function at /metadata if desired.
+   */
   const handleShowMetadata = async () => {
     try {
-      // If you have a separate route for metadata, update accordingly
       const res = await fetch("/api/metadata");
       if (!res.ok) {
         const errorText = await res.text();
@@ -75,7 +85,7 @@ export default function Home() {
       const data = (await res.json()) as MetadataItem[];
       setMetadata(data);
       setShowMetadata(true);
-    } catch (err: unknown) {
+    } catch (err) {
       console.error("Metadata error:", err);
     }
   };
@@ -167,7 +177,7 @@ export default function Home() {
           </div>
         )}
 
-        {/* Display Metadata Table (if you fetch it) */}
+        {/* Display Metadata Table (if fetched) */}
         {showMetadata && metadata.length > 0 && (
           <div className="bg-[#2a2f45] rounded-lg p-6">
             <h2 className="text-lg mb-4 text-[#ffb07c]">Metadata</h2>
