@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 
-/** Types for our data */
 type SearchResult = {
   title: string;
   url: string;
@@ -20,58 +19,54 @@ export default function Home() {
   const [metadata, setMetadata] = useState<MetadataItem[]>([]);
   const [showMetadata, setShowMetadata] = useState(false);
 
-  // Optional states for error and loading
+  // Optional states for error + loading
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  /**
-   * Handle the main search flow:
-   * 1. Validate query
-   * 2. Post to /api/search
-   * 3. Update state with results or error
-   */
   const handleSearch = async () => {
-    // Reset error + set loading
     setError("");
     setLoading(true);
 
-    // Don’t search if the input is empty
     if (!query.trim()) {
       setLoading(false);
       return;
     }
 
     try {
+      // POST to /api/search (App Router). 
+      // If you are using CF Pages, you might do fetch("/search") instead.
       const res = await fetch("/api/search", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ query }),
       });
 
-      // If not ok, parse the error
       if (!res.ok) {
         const errorData = await res.json();
-        setError(errorData.error || "Unknown error occurred.");
+        if (typeof errorData.error === "string") {
+          setError(errorData.error);
+        } else {
+          setError("Unknown error occurred.");
+        }
         setResults([]);
       } else {
-        // Parse the successful result array
         const data = (await res.json()) as SearchResult[];
         setResults(data);
       }
-    } catch (err: any) {
-      console.error("Search error:", err);
-      setError(err.message || "Request failed.");
+    } catch (err: unknown) {
+      if (err instanceof Error) {
+        setError(err.message);
+      } else {
+        setError(String(err));
+      }
     } finally {
       setLoading(false);
     }
   };
 
-  /**
-   * Handle fetching metadata from /api/metadata
-   * (this part is unchanged from your snippet)
-   */
   const handleShowMetadata = async () => {
     try {
+      // If you have a separate route for metadata, update accordingly
       const res = await fetch("/api/metadata");
       if (!res.ok) {
         const errorText = await res.text();
@@ -81,14 +76,11 @@ export default function Home() {
       const data = (await res.json()) as MetadataItem[];
       setMetadata(data);
       setShowMetadata(true);
-    } catch (err) {
+    } catch (err: unknown) {
       console.error("Metadata error:", err);
     }
   };
 
-  /**
-   * Render
-   */
   return (
     <main className="min-h-screen bg-[#1a1f35] flex items-center justify-center px-4 text-white">
       <div className="w-full max-w-2xl">
@@ -176,7 +168,7 @@ export default function Home() {
           </div>
         )}
 
-        {/* Display Metadata Table */}
+        {/* Display Metadata Table (if you fetch it) */}
         {showMetadata && metadata.length > 0 && (
           <div className="bg-[#2a2f45] rounded-lg p-6">
             <h2 className="text-lg mb-4 text-[#ffb07c]">Metadata</h2>

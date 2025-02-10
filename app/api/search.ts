@@ -1,23 +1,97 @@
 // functions/search.ts
 
-export async function onRequestPost(context: any): Promise<Response> {
+/**
+ * Minimal interface for the AI binding described in wrangler.toml:
+ * [ai]
+ * binding = "AI"
+ */
+interface AI {
+    run(
+      model: string,
+      data: { text: string }
+    ): Promise<{
+      data: number[][];
+    }>;
+  }
+  
+  /**
+   * Minimal interface for the Vectorize binding described in wrangler.toml:
+   * [[vectorize]]
+   * binding = "VECTORIZE"
+   * index_name = "blog-posts"
+   */
+  interface VectorizeIndex {
+    query(
+      vector: number[],
+      options: {
+        topK: number;
+        returnMetadata: "all" | "none";
+      }
+    ): Promise<{
+      matches: Array<{
+        score?: number;
+        metadata?: {
+          title?: string;
+          slug?: string;
+        };
+      }>;
+    }>;
+  }
+  
+  /** Environment bindings available in wrangler.toml */
+  interface Env {
+    AI: AI;
+    VECTORIZE: VectorizeIndex;
+  }
+  
+  /** Shape of the incoming request body */
+  interface SearchRequestBody {
+    query?: string;
+  }
+  
+  /** Shape of each match we return to the frontend */
+  interface SearchResult {
+    title: string;
+    url: string;
+    score: string; // e.g. "0.1234" or "N/A"
+  }
+  
+  /** 
+   * Cloudflare Pages Function context.
+   * You can import `ExecutionContext` from '@cloudflare/workers-types'
+   * if you want more robust type definitions. For now, this is minimal.
+   */
+  interface PagesFunctionContext {
+    request: Request;
+    env: Env;
+    params: Record<string, string | string[]>;
+    waitUntil(promise: Promise<unknown>): void;
+    next: () => Promise<Response>;
+    data: Record<string, unknown>;
+  }
+  
+  /**
+   * Handles POST requests to /search
+   */
+  export async function onRequestPost(
+    context: PagesFunctionContext
+  ): Promise<Response> {
     const { request, env } = context;
   
     try {
-      // 1) Parse the request JSON
-      const { query } = await request.json<{
-        query?: string;
-      }>();
+      // 1) Parse the incoming JSON body
+      const body = (await request.json()) as SearchRequestBody;
+      const query = body.query?.trim() || "";
   
-      if (!query || typeof query !== "string") {
+      if (!query) {
         return new Response(JSON.stringify({ error: "Invalid input" }), {
           status: 400,
           headers: { "Content-Type": "application/json" },
         });
       }
   
-      // 2) Run embedding using your AI binding in wrangler.toml
-      //    e.g. [ai] binding = "AI"
+      // 2) Generate embedding using the AI binding
+      //    (Model name is just an example; adjust if you’re using a different model.)
       const embeddingResponse = await env.AI.run("@cf/baai/bge-base-en-v1.5", {
         text: query,
       });
@@ -30,40 +104,54 @@ export async function onRequestPost(context: any): Promise<Response> {
         throw new Error("Failed to generate embedding");
       }
   
-      const queryVector = embeddingResponse.data[0];
+      const queryVector = embeddingResponse.data[0]; // The embedding array
   
-      // 3) Query your Vectorize index (as set in wrangler.toml)
-      //    e.g. [[vectorize]] binding = "VECTORIZE"
-      const matches = await env.VECTORIZE.query(queryVector, {
+      // 3) Query your Vectorize index
+      const searchResult = await env.VECTORIZE.query(queryVector, {
         topK: 5,
         returnMetadata: "all",
       });
   
-      if (!matches || !Array.isArray(matches.matches) || matches.matches.length === 0) {
-        // No results? Return an empty array
+      if (
+        !searchResult ||
+        !Array.isArray(searchResult.matches) ||
+        searchResult.matches.length === 0
+      ) {
+        // No matches? Return an empty array
         return new Response(JSON.stringify([]), {
           headers: { "Content-Type": "application/json" },
         });
       }
   
-      // 4) Map the results to the shape your front-end expects
-      const results = matches.matches
-        .filter((match) => match.metadata && match.metadata.title && match.metadata.slug)
-        .map((match) => ({
-          title: match.metadata.title,
-          url: `https://blog.samrhea.com${match.metadata.slug}`,
-          score: match.score ? match.score.toFixed(4) : "N/A",
-        }));
+      // 4) Shape the results to match your front-end needs
+      const results: SearchResult[] = searchResult.matches
+        .filter(
+          (m) => m.metadata && m.metadata.title && m.metadata.slug
+        )
+        .map((match) => {
+          const title = match.metadata?.title ?? "Untitled";
+          const slug = match.metadata?.slug ?? "";
+          const scoreValue = match.score !== undefined ? match.score : null;
   
+          return {
+            title,
+            url: `https://blog.samrhea.com${slug}`,
+            score: scoreValue !== null ? scoreValue.toFixed(4) : "N/A",
+          };
+        });
+  
+      // 5) Return results
       return new Response(JSON.stringify(results), {
         headers: { "Content-Type": "application/json" },
       });
-    } catch (error: any) {
-      // 5) Handle errors gracefully
+    } catch (error: unknown) {
+      let errorMessage = "An unknown error occurred.";
+      if (error instanceof Error) {
+        errorMessage = error.message;
+      }
+  
       return new Response(
-        JSON.stringify({
-          error: error.message || "An unknown error occurred.",
-        }),
+        JSON.stringify({ error: errorMessage }),
         {
           status: 500,
           headers: { "Content-Type": "application/json" },
