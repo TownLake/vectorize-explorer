@@ -51,13 +51,15 @@ interface AI {
   
   /** Shape of each match we return to the frontend */
   interface SearchResult {
-    title: string;
-    url: string;
-    score: string;
+    title: string; // guaranteed string
+    url: string;   // guaranteed string
+    score: string; // e.g. "0.1234" or "N/A"
   }
   
   /**
    * Cloudflare Pages Function context
+   * (This is a minimal type definition. You can import the full type
+   * from '@cloudflare/workers-types' if you prefer.)
    */
   interface PagesFunctionContext {
     request: Request;
@@ -68,6 +70,9 @@ interface AI {
     data: Record<string, unknown>;
   }
   
+  /**
+   * Handles POST /search
+   */
   export async function onRequestPost(
     context: PagesFunctionContext
   ): Promise<Response> {
@@ -116,14 +121,18 @@ interface AI {
         });
       }
   
-      // 4) Shape the results
+      // 4) Shape the results (provide fallbacks so TypeScript sees guaranteed strings)
       const results: SearchResult[] = searchResult.matches
         .filter((m) => m.metadata?.title && m.metadata?.slug)
         .map((match) => {
+          // Fallbacks if metadata.title or metadata.slug is somehow missing
+          const safeTitle = match.metadata?.title ?? "Untitled";
+          const safeSlug = match.metadata?.slug ?? "";
+  
           const scoreValue = match.score ?? null;
           return {
-            title: match.metadata!.title,
-            url: `https://blog.samrhea.com${match.metadata!.slug}`,
+            title: safeTitle,
+            url: `https://blog.samrhea.com${safeSlug}`,
             score: scoreValue !== null ? scoreValue.toFixed(4) : "N/A",
           };
         });
