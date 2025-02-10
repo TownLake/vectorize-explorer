@@ -26,23 +26,22 @@ export default function Home() {
   const handleSearch = async () => {
     setError("");
     setLoading(true);
-
+  
     if (!query.trim()) {
       setLoading(false);
       return;
     }
-
+  
     try {
-      // POST to /api/search (App Router). 
-      // If you are using CF Pages, you might do fetch("/search") instead.
       const res = await fetch("/api/search", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ query }),
       });
-
+  
       if (!res.ok) {
-        const errorData = await res.json();
+        // Tell TS what shape we expect from the error response
+        const errorData = (await res.json()) as { error?: string };
         if (typeof errorData.error === "string") {
           setError(errorData.error);
         } else {
@@ -62,7 +61,7 @@ export default function Home() {
     } finally {
       setLoading(false);
     }
-  };
+  };  
 
   const handleShowMetadata = async () => {
     try {
