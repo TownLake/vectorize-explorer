@@ -1,7 +1,5 @@
 // functions/api/search.ts
 
-// This export is specific to Cloudflare Pages Functions.
-// The onRequest handler receives the request and the environment bindings.
 export async function onRequest(context: {
     request: Request;
     env: {
@@ -16,29 +14,14 @@ export async function onRequest(context: {
       return new Response("Method Not Allowed", { status: 405 });
     }
   
-    // Parse the JSON body
-    let data;
-    try {
-      data = await request.json();
-    } catch (e) {
-      return new Response(
-        JSON.stringify({ error: "Invalid JSON" }),
-        {
-          status: 400,
-          headers: { "Content-Type": "application/json" },
-        }
-      );
-    }
+    // Use a type assertion to inform TypeScript about the expected shape.
+    const { query } = (await request.json()) as { query: string };
   
-    const { query } = data;
     if (!query || typeof query !== "string") {
-      return new Response(
-        JSON.stringify({ error: "Invalid input" }),
-        {
-          status: 400,
-          headers: { "Content-Type": "application/json" },
-        }
-      );
+      return new Response(JSON.stringify({ error: "Invalid input" }), {
+        status: 400,
+        headers: { "Content-Type": "application/json" },
+      });
     }
   
     try {
@@ -67,7 +50,6 @@ export async function onRequest(context: {
       }
   
       // Map the matches to your expected output format.
-      // (This example assumes your metadata has "title" and "slug". Adjust the URL as needed.)
       const results = matches.matches
         .filter(
           (match: any) =>
