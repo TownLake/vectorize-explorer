@@ -9,15 +9,9 @@ type SearchResult = {
   score: string;
 };
 
-type MetadataItem = {
-  title: string;
-  url: string;
-};
-
 export default function Home() {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchResult[]>([]);
-  const [metadata, setMetadata] = useState<MetadataItem[]>([]);
   const [showMetadata, setShowMetadata] = useState(false);
 
   const handleSearch = async () => {
@@ -43,7 +37,6 @@ export default function Home() {
   };
 
   const handleShowMetadata = () => {
-    // For now, this function just logs and toggles a placeholder.
     console.log("Show Metadata clicked. Functionality not implemented yet.");
     setShowMetadata(true);
   };
