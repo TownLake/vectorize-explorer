@@ -1,63 +1,95 @@
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 
-interface Env {
-    VECTORIZE: {
-        list: (options?: {
-            cursor?: string;
-            limit?: number;
-        }) => Promise<{
-            data: Array<{
-                id: string;
-                metadata?: {
-                    title?: string;
-                    slug?: string;
-                    [key: string]: any;  // Allow for additional metadata fields
-                };
-            }>;
-            cursor?: string;
-            done: boolean;
+// Define the Vectorize binding interface
+interface VectorizeBinding {
+    list: (options?: {
+        cursor?: string;
+        limit?: number;
+    }) => Promise<{
+        data: Array<{
+            id: string;
+            metadata?: Record<string, any>;
         }>;
+        cursor?: string;
+        done: boolean;
+    }>;
+}
+
+// Define the complete platform environment interface
+interface Platform {
+    env?: {
+        VECTORIZE: VectorizeBinding;
     };
 }
 
 export const GET: RequestHandler = async ({ platform }) => {
-    const env = platform?.env as Env;
+    // Type assertion for platform
+    const env = (platform as Platform)?.env;
 
+    // Early validation of the Vectorize binding
     if (!env?.VECTORIZE) {
-        throw error(500, 'Server configuration error: Vectorize not available');
+        console.error('Vectorize binding not found in environment');
+        throw error(500, {
+            message: 'Server configuration error: Vectorize binding not available'
+        });
     }
 
     try {
-        const allMetadata = [];
+        const allMetadata: Array<Record<string, any>> = [];
         let cursor: string | undefined;
         let done = false;
 
-        // Paginate through all vectors to get complete metadata
+        // Paginate through all vectors
         while (!done) {
-            const response = await env.VECTORIZE.list({
-                cursor,
-                limit: 1000  // Adjust this value based on your needs
-            });
+            try {
+                const response = await env.VECTORIZE.list({
+                    cursor,
+                    limit: 100 // Reduced for better performance
+                });
 
-            const metadataEntries = response.data
-                .filter(entry => entry.metadata)
-                .map(entry => ({
-                    id: entry.id,
-                    ...entry.metadata
-                }));
+                const metadataEntries = response.data
+                    .filter(entry => entry.metadata)
+                    .map(entry => ({
+                        id: entry.id,
+                        ...entry.metadata
+                    }));
 
-            allMetadata.push(...metadataEntries);
-            
-            cursor = response.cursor;
-            done = response.done;
+                allMetadata.push(...metadataEntries);
+                
+                cursor = response.cursor;
+                done = response.done;
+            } catch (listError) {
+                console.error('Error during pagination:', listError);
+                throw error(500, {
+                    message: 'Error while fetching vectorize entries',
+                    cause: listError instanceof Error ? listError.message : 'Unknown error'
+                });
+            }
         }
 
-        // Calculate some basic statistics
+        // Handle case where no metadata was found
+        if (allMetadata.length === 0) {
+            return json({
+                metadata: [],
+                stats: {
+                    totalEntries: 0,
+                    uniqueTitles: 0,
+                    metadataFields: []
+                },
+                timestamp: new Date().toISOString()
+            });
+        }
+
+        // Calculate statistics
         const stats = {
             totalEntries: allMetadata.length,
-            uniqueTitles: new Set(allMetadata.map(entry => entry.title)).size,
-            metadataFields: Object.keys(allMetadata[0] || {})
+            uniqueTitles: new Set(allMetadata.map(entry => entry.title).filter(Boolean)).size,
+            metadataFields: Array.from(
+                new Set(
+                    allMetadata.flatMap(entry => Object.keys(entry))
+                )
+            )
         };
 
         return json({
@@ -69,13 +101,15 @@ export const GET: RequestHandler = async ({ platform }) => {
     } catch (err) {
         console.error('Metadata fetch error:', err);
         
+        // If it's already a SvelteKit error, rethrow it
         if (err instanceof Error && 'status' in err) {
             throw err;
         }
         
-        throw error(
-            500,
-            'An error occurred while fetching metadata'
-        );
+        // Otherwise, wrap it in a new error
+        throw error(500, {
+            message: 'An error occurred while fetching metadata',
+            cause: err instanceof Error ? err.message : 'Unknown error'
+        });
     }
 };
