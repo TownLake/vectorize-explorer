@@ -1,35 +1,29 @@
 {
-  "name": "my-next-app",
-  "version": "0.1.0",
+  "name": "my-svelte-app",
   "private": true,
+  "version": "0.0.1",
+  "type": "module",
   "scripts": {
-    "dev": "next dev --turbopack",
-    "build": "next build",
-    "start": "next start",
-    "lint": "next lint",
-    "pages:build": "npx @cloudflare/next-on-pages",
-    "preview": "npm run pages:build && wrangler pages dev",
-    "deploy": "npm run pages:build && wrangler pages deploy",
-    "cf-typegen": "wrangler types --env-interface CloudflareEnv env.d.ts"
-  },
-  "dependencies": {
-    "next": "15.1.5",
-    "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "dev": "vite dev",
+    "build": "vite build",
+    "preview": "npm run build && wrangler pages dev",
+    "prepare": "svelte-kit sync || echo ''",
+    "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
+    "check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
+    "deploy": "npm run build && wrangler pages deploy",
+    "cf-typegen": "wrangler types && mv worker-configuration.d.ts src/"
   },
   "devDependencies": {
-    "@cloudflare/next-on-pages": "^1.13.7",
     "@cloudflare/workers-types": "^4.20250204.0",
-    "@eslint/eslintrc": "^3",
-    "@types/node": "^20",
-    "@types/react": "^19",
-    "@types/react-dom": "^19",
-    "eslint": "^9",
-    "eslint-config-next": "15.1.5",
-    "postcss": "^8",
-    "tailwindcss": "^3.4.1",
-    "typescript": "^5",
-    "vercel": "^41.0.2",
-    "wrangler": "^3.107.3"
+    "@sveltejs/adapter-cloudflare": "^5.0.2",
+    "@sveltejs/kit": "^2.16.0",
+    "@sveltejs/vite-plugin-svelte": "^5.0.0",
+    "autoprefixer": "^10.4.20",
+    "svelte": "^5.0.0",
+    "svelte-check": "^4.0.0",
+    "tailwindcss": "^3.4.17",
+    "typescript": "^5.0.0",
+    "vite": "^6.0.0",
+    "wrangler": "^3.108.0"
   }
 }
