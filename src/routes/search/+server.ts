@@ -1,65 +1,62 @@
-import type { RequestHandler } from './$types';
+// src/routes/search/+server.ts
+import type { RequestHandler } from '@sveltejs/kit';
+import { json } from '@sveltejs/kit';
 
-export const POST: RequestHandler = async ({ request, env }) => {
-  try {
-    // Remove or guard diagnostic logging:
-    // console.log("env keys:", env ? Object.keys(env) : "env is undefined");
+export const POST: RequestHandler = async ({ request, platform }) => {
+	try {
+		// Parse the JSON payload sent from the client
+		const { query } = await request.json();
 
-    const { query } = await request.json();
-    if (!query || typeof query !== 'string') {
-      return new Response(
-        JSON.stringify({ error: 'Invalid input' }),
-        { status: 400, headers: { 'Content-Type': 'application/json' } }
-      );
-    }
+		// Validate the query input
+		if (!query || typeof query !== 'string') {
+			return json({ error: 'Invalid input' }, { status: 400 });
+		}
 
-    // Check if the bindings are available.
-    if (!env || !env.AI || !env.VECTORIZE) {
-      return new Response(
-        JSON.stringify({ error: 'Required Cloudflare bindings not available' }),
-        { status: 500, headers: { 'Content-Type': 'application/json' } }
-      );
-    }
+		// Use the AI binding to generate an embedding for the query.
+		// Note: Make sure the AI binding name in your wrangler.toml or _config is "AI"
+		const embeddingResponse = await platform.AI.run('@cf/baai/bge-base-en-v1.5', { text: query });
 
-    // Generate an embedding using the AI binding.
-    const embeddingResponse = await env.AI.run("@cf/baai/bge-base-en-v1.5", { text: query });
-    if (
-      !embeddingResponse ||
-      !Array.isArray(embeddingResponse.data) ||
-      embeddingResponse.data.length === 0
-    ) {
-      throw new Error("Failed to generate embedding");
-    }
-    const queryVector = embeddingResponse.data[0];
+		// Check that the embedding was generated properly
+		if (
+			!embeddingResponse ||
+			!Array.isArray(embeddingResponse.data) ||
+			embeddingResponse.data.length === 0
+		) {
+			throw new Error('Failed to generate embedding');
+		}
 
-    // Query your vector index using the VECTORIZE binding.
-    const matches = await env.VECTORIZE.query(queryVector, {
-      topK: 5,
-      returnMetadata: "all"
-    });
+		// Use the first generated embedding as the query vector
+		const queryVector = embeddingResponse.data[0];
 
-    if (!matches || !Array.isArray(matches.matches) || matches.matches.length === 0) {
-      return new Response(JSON.stringify([]), {
-        headers: { 'Content-Type': 'application/json' }
-      });
-    }
+		// Query the VECTORIZE binding with the vector.
+		// Ensure your VECTORIZE binding is set up with binding name "VECTORIZE" and your index name is correct.
+		const matches = await platform.VECTORIZE.query(queryVector, {
+			topK: 5,
+			returnMetadata: 'all'
+		});
 
-    const results = matches.matches
-      .filter(match => match.metadata && match.metadata.title && match.metadata.slug)
-      .map(match => ({
-        title: match.metadata.title,
-        url: `https://blog.samrhea.com${match.metadata.slug}`,
-        score: match.score ? match.score.toFixed(4) : "N/A"
-      }));
+		// If no matches are found, return an empty array
+		if (!matches || !Array.isArray(matches.matches) || matches.matches.length === 0) {
+			return json([]);
+		}
 
-    return new Response(JSON.stringify(results), {
-      headers: { 'Content-Type': 'application/json' }
-    });
-  } catch (error: any) {
-    console.error("Search error:", error);
-    return new Response(
-      JSON.stringify({ error: error.message }),
-      { status: 500, headers: { 'Content-Type': 'application/json' } }
-    );
-  }
+		// Map the results to the desired output format
+		const results = matches.matches
+			.filter(
+				(match: any) =>
+					match.metadata &&
+					match.metadata.title &&
+					match.metadata.slug
+			)
+			.map((match: any) => ({
+				title: match.metadata.title,
+				url: `https://blog.samrhea.com${match.metadata.slug}`,
+				score: match.score ? match.score.toFixed(4) : 'N/A'
+			}));
+
+		return json(results);
+	} catch (error: any) {
+		// If an error occurs, return it with a 500 status
+		return json({ error: error.message }, { status: 500 });
+	}
 };
