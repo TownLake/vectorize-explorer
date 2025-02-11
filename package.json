@@ -9,7 +9,7 @@
   "dependencies": {
     "@sveltejs/adapter-cloudflare": "^5.0.2",
     "@sveltejs/kit": "^2.17.1",
-    "svelte": "^4.0.0"
+    "svelte": "^5.19.10"
   },
   "devDependencies": {
     "autoprefixer": "^10.0.0",
