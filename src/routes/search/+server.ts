@@ -1,67 +1,98 @@
-// src/routes/search/+server.ts
-import type { RequestHandler } from '@sveltejs/kit';
-import { json } from '@sveltejs/kit';
+import { json, error } from '@sveltejs/kit';
+import type { RequestHandler } from './$types';
 
-export const POST: RequestHandler = async ({ request, env }) => {
-	try {
-		// Log to check if the bindings are present (similar to your Next.js example)
-		console.log('AI binding check:', !!env.AI);
-		console.log('VECTORIZE binding check:', !!env.VECTORIZE);
+// Define the environment variables interface
+interface Env {
+    AI: {
+        run: (model: string, params: { text: string }) => Promise<{
+            data: number[][];
+        }>;
+    };
+    VECTORIZE: {
+        query: (
+            vector: number[],
+            options: {
+                topK: number;
+                returnMetadata: string;
+            }
+        ) => Promise<{
+            matches: Array<{
+                metadata?: {
+                    title?: string;
+                    slug?: string;
+                };
+                score?: number;
+            }>;
+        }>;
+    };
+}
 
-		// Parse the incoming request body
-		const { query } = await request.json();
-		if (!query || typeof query !== 'string') {
-			return json({ error: 'Invalid input' }, { status: 400 });
-		}
+// Define the search result interface
+interface SearchResult {
+    title: string;
+    url: string;
+    score: string;
+}
 
-		// Verify that the AI binding is available
-		if (!env.AI) {
-			console.error('AI binding not found');
-			throw new Error('AI binding not found');
-		}
+export const POST: RequestHandler = async ({ request, platform }) => {
+    // Type assertion for platform environment
+    const env = platform?.env as Env;
 
-		// Verify that the VECTORIZE binding is available
-		if (!env.VECTORIZE) {
-			console.error('VECTORIZE binding not found');
-			throw new Error('VECTORIZE binding not found');
-		}
+    if (!env?.AI || !env?.VECTORIZE) {
+        throw error(500, 'Server configuration error: AI or Vectorize not available');
+    }
 
-		// Generate the embedding using the AI binding
-		const embeddingResponse = await env.AI.run('@cf/baai/bge-base-en-v1.5', { text: query });
-		if (
-			!embeddingResponse ||
-			!Array.isArray(embeddingResponse.data) ||
-			embeddingResponse.data.length === 0
-		) {
-			throw new Error('Failed to generate embedding');
-		}
-		const queryVector = embeddingResponse.data[0];
+    try {
+        const { query } = await request.json();
 
-		// Query the vector index via the VECTORIZE binding
-		const matches = await env.VECTORIZE.query(queryVector, {
-			topK: 5,
-			returnMetadata: 'all'
-		});
+        // Validate input
+        if (!query || typeof query !== 'string') {
+            throw error(400, 'Invalid input: query must be a non-empty string');
+        }
 
-		// If no matches are found, return an empty array
-		if (!matches || !Array.isArray(matches.matches) || matches.matches.length === 0) {
-			return json([]);
-		}
+        // Generate embedding using Workers AI
+        const embeddingResponse = await env.AI.run('@cf/baai/bge-base-en-v1.5', {
+            text: query
+        });
 
-		// Map the results to the desired output format
-		const results = matches.matches
-			.filter((match: any) => 
-				match.metadata && match.metadata.title && match.metadata.slug
-			)
-			.map((match: any) => ({
-				title: match.metadata.title,
-				url: `https://blog.samrhea.com${match.metadata.slug}`,
-				score: match.score ? match.score.toFixed(4) : 'N/A'
-			}));
+        if (!embeddingResponse?.data?.[0]) {
+            throw error(500, 'Failed to generate embedding');
+        }
 
-		return json(results);
-	} catch (error: any) {
-		console.error('Error in search endpoint:', error);
-		return json({ error: error.message }, { status: 500 });
-	}
+        const queryVector = embeddingResponse.data[0];
+
+        // Query Vectorize DB
+        const matches = await env.VECTORIZE.query(queryVector, {
+            topK: 5,
+            returnMetadata: 'all'
+        });
+
+        if (!matches?.matches) {
+            return json([]);
+        }
+
+        // Process and format results
+        const results: SearchResult[] = matches.matches
+            .filter((match) => match.metadata?.title && match.metadata?.slug)
+            .map((match) => ({
+                title: match.metadata!.title!,
+                url: `https://blog.samrhea.com${match.metadata!.slug!}`,
+                score: match.score?.toFixed(4) ?? 'N/A'
+            }));
+
+        return json(results);
+    } catch (err) {
+        console.error('Search error:', err);
+        
+        // If it's already a SvelteKit error, rethrow it
+        if (err instanceof Error && 'status' in err) {
+            throw err;
+        }
+        
+        // Otherwise, throw a generic error
+        throw error(
+            500,
+            'An error occurred while processing your search request'
+        );
+    }
 };
