@@ -1,3 +1,4 @@
+// app/page.tsx
 "use client";
 
 import { useState } from "react";
@@ -41,20 +42,10 @@ export default function Home() {
     }
   };
 
-  const handleShowMetadata = async () => {
-    try {
-      const res = await fetch("/api/metadata");
-      if (!res.ok) {
-        const errorText = await res.text();
-        console.error("Metadata fetch error:", errorText);
-        return;
-      }
-      const data = (await res.json()) as MetadataItem[];
-      setMetadata(data);
-      setShowMetadata(true);
-    } catch (err) {
-      console.error("Metadata error:", err);
-    }
+  const handleShowMetadata = () => {
+    // For now, this function just logs and toggles a placeholder.
+    console.log("Show Metadata clicked. Functionality not implemented yet.");
+    setShowMetadata(true);
   };
 
   return (
@@ -136,39 +127,12 @@ export default function Home() {
           </div>
         )}
 
-        {showMetadata && metadata.length > 0 && (
+        {showMetadata && (
           <div className="bg-[#2a2f45] rounded-lg p-6">
             <h2 className="text-lg mb-4 text-[#ffb07c]">Metadata</h2>
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b border-[#ffb07c]/10">
-                    <th className="py-3 text-left text-white/60">Title</th>
-                    <th className="py-3 text-left text-white/60">URL</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {metadata.map((item, index) => (
-                    <tr 
-                      key={index} 
-                      className="border-b border-white/10 last:border-b-0 hover:bg-[#3a3f55] transition-colors duration-300"
-                    >
-                      <td className="py-3 text-white/90">{item.title}</td>
-                      <td className="py-3">
-                        <a
-                          href={item.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-[#ffb07c]/70 hover:text-[#ffb07c] hover:underline"
-                        >
-                          {item.url}
-                        </a>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <p className="text-white/70">
+              Metadata functionality is not implemented yet.
+            </p>
           </div>
         )}
       </div>
