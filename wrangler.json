@@ -1,14 +1,13 @@
 {
-  "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "my-next-app",
-  "compatibility_date": "2025-02-04",
+  "version": 2,
   "compatibility_flags": [
     "nodejs_compat"
   ],
-  "pages_build_output_dir": "dist",
-  "observability": {
-    "enabled": true
+  "build": {
+    "command": "npm run build",
+    "cwd": "."
   },
+  "pages_build_output_dir": "dist",
   "vectorize": [
     {
       "binding": "VECTORIZE",
