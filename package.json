@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev --turbopack",
-    "build": "next build && next-on-pages", 
+    "build": "next build && NEXT_ON_PAGES_SKIP_VERCEL_BUILD=1 next-on-pages", 
     "postbuild": "cp -R .vercel/output dist",
     "start": "next start",
     "lint": "next lint",
