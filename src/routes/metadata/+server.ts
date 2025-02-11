@@ -1,51 +1,85 @@
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 
-// Define the Vectorize binding interface
+// Define a more specific Vectorize response type
+interface VectorizeEntry {
+    id: string;
+    metadata?: Record<string, any>;
+}
+
+interface VectorizeResponse {
+    data: VectorizeEntry[];
+    cursor?: string;
+    done: boolean;
+}
+
 interface VectorizeBinding {
     list: (options?: {
         cursor?: string;
         limit?: number;
-    }) => Promise<{
-        data: Array<{
-            id: string;
-            metadata?: Record<string, any>;
-        }>;
-        cursor?: string;
-        done: boolean;
-    }>;
+    }) => Promise<VectorizeResponse>;
 }
 
-// Define the complete platform environment interface
-interface Platform {
-    env?: {
-        VECTORIZE: VectorizeBinding;
-    };
-}
+export const GET: RequestHandler = async ({ platform, request }) => {
+    console.log('Request received:', request.url);
+    console.log('Platform object:', JSON.stringify(platform, null, 2));
 
-export const GET: RequestHandler = async ({ platform }) => {
-    // Type assertion for platform
-    const env = (platform as Platform)?.env;
-
-    // Early validation of the Vectorize binding
-    if (!env?.VECTORIZE) {
-        console.error('Vectorize binding not found in environment');
+    // Check if we're running in Cloudflare Pages
+    if (!platform) {
+        console.error('No platform object available');
         throw error(500, {
-            message: 'Server configuration error: Vectorize binding not available'
+            message: 'Not running in Cloudflare Pages environment'
+        });
+    }
+
+    // Explicit type check for Cloudflare environment
+    const env = platform.env;
+    console.log('Environment bindings:', Object.keys(env || {}));
+
+    if (!env) {
+        console.error('No env object in platform');
+        throw error(500, {
+            message: 'No environment bindings available'
+        });
+    }
+
+    // Check for VECTORIZE binding
+    if (!env.VECTORIZE) {
+        console.error('VECTORIZE binding not found');
+        throw error(500, {
+            message: 'VECTORIZE binding not found in environment',
+            available_bindings: Object.keys(env)
+        });
+    }
+
+    // Validate that VECTORIZE has the list method
+    if (typeof env.VECTORIZE.list !== 'function') {
+        console.error('VECTORIZE.list is not a function');
+        throw error(500, {
+            message: 'Invalid VECTORIZE binding configuration'
         });
     }
 
     try {
-        const allMetadata: Array<Record<string, any>> = [];
+        const allMetadata: Record<string, any>[] = [];
         let cursor: string | undefined;
         let done = false;
+        let pageCount = 0;
 
-        // Paginate through all vectors
-        while (!done) {
+        while (!done && pageCount < 10) { // Added safety limit
+            pageCount++;
+            console.log(`Fetching page ${pageCount}, cursor: ${cursor || 'initial'}`);
+
             try {
                 const response = await env.VECTORIZE.list({
                     cursor,
-                    limit: 100 // Reduced for better performance
+                    limit: 50 // Reduced further for testing
+                });
+
+                console.log(`Page ${pageCount} response:`, {
+                    dataCount: response.data.length,
+                    hasNextPage: !response.done,
+                    cursor: response.cursor
                 });
 
                 const metadataEntries = response.data
@@ -56,34 +90,26 @@ export const GET: RequestHandler = async ({ platform }) => {
                     }));
 
                 allMetadata.push(...metadataEntries);
-                
                 cursor = response.cursor;
                 done = response.done;
+
             } catch (listError) {
-                console.error('Error during pagination:', listError);
+                console.error(`Error on page ${pageCount}:`, listError);
                 throw error(500, {
-                    message: 'Error while fetching vectorize entries',
+                    message: 'Error fetching vectorize page',
+                    page: pageCount,
                     cause: listError instanceof Error ? listError.message : 'Unknown error'
                 });
             }
         }
 
-        // Handle case where no metadata was found
-        if (allMetadata.length === 0) {
-            return json({
-                metadata: [],
-                stats: {
-                    totalEntries: 0,
-                    uniqueTitles: 0,
-                    metadataFields: []
-                },
-                timestamp: new Date().toISOString()
-            });
+        if (pageCount >= 10 && !done) {
+            console.warn('Reached maximum page limit');
         }
 
-        // Calculate statistics
         const stats = {
             totalEntries: allMetadata.length,
+            pagesProcessed: pageCount,
             uniqueTitles: new Set(allMetadata.map(entry => entry.title).filter(Boolean)).size,
             metadataFields: Array.from(
                 new Set(
@@ -92,6 +118,8 @@ export const GET: RequestHandler = async ({ platform }) => {
             )
         };
 
+        console.log('Final stats:', stats);
+
         return json({
             metadata: allMetadata,
             stats,
@@ -99,17 +127,15 @@ export const GET: RequestHandler = async ({ platform }) => {
         });
 
     } catch (err) {
-        console.error('Metadata fetch error:', err);
+        console.error('Top-level error:', err);
         
-        // If it's already a SvelteKit error, rethrow it
         if (err instanceof Error && 'status' in err) {
             throw err;
         }
         
-        // Otherwise, wrap it in a new error
         throw error(500, {
-            message: 'An error occurred while fetching metadata',
-            cause: err instanceof Error ? err.message : 'Unknown error'
+            message: 'Failed to fetch metadata',
+            error: err instanceof Error ? err.message : 'Unknown error'
         });
     }
 };
