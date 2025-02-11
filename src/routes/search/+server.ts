@@ -2,7 +2,7 @@
 import type { RequestHandler } from '@sveltejs/kit';
 import { json } from '@sveltejs/kit';
 
-export const POST: RequestHandler = async ({ request, platform }) => {
+export const POST: RequestHandler = async ({ request, env }) => {
 	try {
 		// Parse the JSON payload sent from the client
 		const { query } = await request.json();
@@ -12,11 +12,11 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 			return json({ error: 'Invalid input' }, { status: 400 });
 		}
 
-		// Use the AI binding to generate an embedding for the query.
-		// Note: Make sure the AI binding name in your wrangler.toml or _config is "AI"
-		const embeddingResponse = await platform.AI.run('@cf/baai/bge-base-en-v1.5', { text: query });
+		// Generate the embedding using your AI binding
+		// Ensure that your binding name is "AI" in your wrangler.toml or Cloudflare Pages settings
+		const embeddingResponse = await env.AI.run('@cf/baai/bge-base-en-v1.5', { text: query });
 
-		// Check that the embedding was generated properly
+		// Verify that the embedding was generated successfully
 		if (
 			!embeddingResponse ||
 			!Array.isArray(embeddingResponse.data) ||
@@ -25,12 +25,11 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 			throw new Error('Failed to generate embedding');
 		}
 
-		// Use the first generated embedding as the query vector
+		// Use the first embedding as the query vector
 		const queryVector = embeddingResponse.data[0];
 
-		// Query the VECTORIZE binding with the vector.
-		// Ensure your VECTORIZE binding is set up with binding name "VECTORIZE" and your index name is correct.
-		const matches = await platform.VECTORIZE.query(queryVector, {
+		// Query your VECTORIZE binding (ensure the binding name is "VECTORIZE")
+		const matches = await env.VECTORIZE.query(queryVector, {
 			topK: 5,
 			returnMetadata: 'all'
 		});
@@ -40,13 +39,12 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 			return json([]);
 		}
 
-		// Map the results to the desired output format
+		// Format the matches into the desired output
 		const results = matches.matches
-			.filter(
-				(match: any) =>
-					match.metadata &&
-					match.metadata.title &&
-					match.metadata.slug
+			.filter((match: any) =>
+				match.metadata &&
+				match.metadata.title &&
+				match.metadata.slug
 			)
 			.map((match: any) => ({
 				title: match.metadata.title,
@@ -56,7 +54,7 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 
 		return json(results);
 	} catch (error: any) {
-		// If an error occurs, return it with a 500 status
+		// Return any errors that occur with a 500 status
 		return json({ error: error.message }, { status: 500 });
 	}
 };
