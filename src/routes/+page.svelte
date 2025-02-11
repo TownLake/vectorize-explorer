@@ -1,5 +1,4 @@
-&lt;script lang="ts">
-  // Update interfaces to match the metadata endpoint response
+<script lang="ts">
   interface MetadataEntry {
     id: string;
     title?: string;
@@ -79,7 +78,7 @@
       handleSearch();
     }
   }
-&lt;/script>
+</script>
 
 <main class="min-h-screen bg-[#1a1f35] flex items-center justify-center px-4 text-white">
   <div class="w-full max-w-2xl">
@@ -87,7 +86,6 @@
       What vectors do you need?
     </h1>
 
-    <!-- Search input and button remain the same -->
     <div class="relative w-full mb-6">
       <input
         type="text"
@@ -134,7 +132,6 @@
     </div>
 
     {#if results.length > 0}
-      <!-- Search results section remains the same -->
       <div class="bg-[#2a2f45] rounded-lg p-6 mb-6">
         <h2 class="text-lg mb-4 text-[#ffb07c]">Search Results</h2>
         <div class="space-y-4">
