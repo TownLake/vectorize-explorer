@@ -2,7 +2,7 @@
   let query: string = '';
   let results: { title: string; url: string; score: number | string }[] = [];
   let showMetadata: boolean = false;
-  let metadata: { id?: string; title: string; url: string }[] = [];
+  let metadata: { propertyName: string; indexType: string }[] = [];
   let isLoadingMetadata: boolean = false;
   let metadataError: string | null = null;
 
@@ -21,7 +21,6 @@
         results = [];
         return;
       }
-
       results = await response.json();
     } catch (error) {
       console.error('Error fetching search results:', error);
@@ -29,48 +28,27 @@
     }
   }
 
-  // Toggle metadata view and fetch metadata from the endpoint if showing.
+  // Toggle metadata view and fetch metadata indexes from the endpoint if showing.
   async function handleShowMetadata() {
     showMetadata = !showMetadata;
-
     if (showMetadata) {
       isLoadingMetadata = true;
       metadataError = null;
       try {
         const response = await fetch('/metadata');
         if (!response.ok) {
-          // Log additional details: status, status text and raw response text.
-          const responseText = await response.text();
-          console.error(
-            `Metadata endpoint returned error: ${response.status} ${response.statusText}`,
-            responseText
-          );
-          metadataError = `Failed to load metadata (Status: ${response.status} ${response.statusText})`;
+          const errText = await response.text();
+          console.error('Metadata endpoint error:', errText);
+          metadataError = `Failed to load metadata: ${response.statusText}`;
           return;
         }
-        
-        // Log the full JSON payload for inspection.
         const data = await response.json();
         console.log('Received metadata payload:', data);
-
-        if (!data.metadata) {
-          console.error('No metadata property in response:', data);
-          metadataError = 'No metadata found in response';
-          return;
-        }
-
-        // Log each metadata entry as it is processed.
-        metadata = data.metadata.map((entry: any) => {
-          console.log('Mapping metadata entry:', entry);
-          return {
-            id: entry.id,
-            title: entry.title || 'N/A',
-            url: entry.slug ? `https://blog.samrhea.com${entry.slug}` : '#'
-          };
-        });
+        // data.metadata is expected to be an array of objects with propertyName and indexType.
+        metadata = data.metadata;
       } catch (error) {
         console.error('Error fetching metadata:', error);
-        metadataError = 'Failed to load metadata: ' + error.toString();
+        metadataError = 'Failed to load metadata';
       } finally {
         isLoadingMetadata = false;
       }
@@ -158,7 +136,7 @@
 
     {#if showMetadata}
       <div class="bg-[#2a2f45] rounded-lg p-6">
-        <h2 class="text-lg mb-4 text-[#ffb07c]">Metadata</h2>
+        <h2 class="text-lg mb-4 text-[#ffb07c]">Metadata Indexes</h2>
         {#if isLoadingMetadata}
           <p>Loading metadata...</p>
         {:else if metadataError}
@@ -168,30 +146,22 @@
             <table class="w-full">
               <thead>
                 <tr class="border-b border-[#ffb07c]/10">
-                  <th class="py-3 text-left text-white/60">Title</th>
-                  <th class="py-3 text-left text-white/60">URL</th>
+                  <th class="py-3 text-left text-white/60">Property Name</th>
+                  <th class="py-3 text-left text-white/60">Index Type</th>
                 </tr>
               </thead>
               <tbody>
-                {#each metadata as item, index (item.id || index)}
+                {#each metadata as item, index (index)}
                   <tr class="border-b border-white/10 last:border-b-0 hover:bg-[#3a3f55] transition-colors duration-300">
-                    <td class="py-3 text-white/90">{item.title}</td>
-                    <td class="py-3">
-                      <a
-                        href={item.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        class="text-[#ffb07c]/70 hover:text-[#ffb07c] hover:underline">
-                        {item.url}
-                      </a>
-                    </td>
+                    <td class="py-3 text-white/90">{item.propertyName}</td>
+                    <td class="py-3 text-white/90">{item.indexType}</td>
                   </tr>
                 {/each}
               </tbody>
             </table>
           </div>
         {:else}
-          <p>No metadata available.</p>
+          <p>No metadata indexes available.</p>
         {/if}
       </div>
     {/if}

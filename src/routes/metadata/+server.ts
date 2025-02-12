@@ -2,68 +2,69 @@
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 
-export const GET: RequestHandler = async ({ platform, request }) => {
-  console.log('Metadata endpoint invoked:', request.url);
+export const GET: RequestHandler = async ({ platform }) => {
+  console.log('Metadata endpoint invoked');
 
   if (!platform) {
-    console.error('No platform object available');
-    throw error(500, { message: 'Not running in Cloudflare Pages environment' });
+    console.error('Not running in Cloudflare Pages environment');
+    throw error(500, 'Not running in Cloudflare Pages environment');
   }
 
   const env = platform.env;
   if (!env) {
-    console.error('No env object in platform');
-    throw error(500, { message: 'No environment bindings available' });
+    console.error('No environment bindings available');
+    throw error(500, 'No environment bindings available');
   }
 
-  if (typeof env.VECTORIZE.query !== 'function') {
-    console.error('VECTORIZE.query is not a function');
-    throw error(500, { message: 'Invalid VECTORIZE binding configuration: query method missing' });
+  // Expect these environment variables to be defined in your Cloudflare configuration:
+  const accountId = env.CLOUDFLARE_ACCOUNT_ID;
+  const email = env.CLOUDFLARE_EMAIL;
+  const apiKey = env.CLOUDFLARE_API_KEY;
+  const indexName = env.VECTORIZE_INDEX_NAME;
+
+  if (!accountId || !email || !apiKey || !indexName) {
+    console.error('Missing one or more required environment variables');
+    throw error(500, 'Missing one or more required environment variables');
   }
+
+  // Construct the Cloudflare API endpoint URL for listing metadata indexes
+  const url = `https://api.cloudflare.com/client/v4/accounts/${accountId}/vectorize/v2/indexes/${indexName}/metadata_index/list`;
+  console.log('Fetching metadata from:', url);
 
   try {
-    // Use a normalized dummy vector instead of zeros.
-    const dimension = 768;
-    const dummyVector = Array(dimension).fill(1 / Math.sqrt(dimension));
-    console.log('Using dummy vector:', dummyVector);
-
-    // Update query parameters per the API's suggestion.
-    const queryResponse = await env.VECTORIZE.query(dummyVector, {
-      topK: 100,
-      returnMetadata: 'indexed',
-      returnValues: false
+    const response = await fetch(url, {
+      headers: {
+        "X-Auth-Email": email,
+        "X-Auth-Key": apiKey
+      }
     });
 
-    console.log('Query response:', JSON.stringify(queryResponse, null, 2));
+    if (!response.ok) {
+      const text = await response.text();
+      console.error(
+        `Error fetching metadata index: ${response.status} ${response.statusText} - ${text}`
+      );
+      throw error(500, `Error fetching metadata index: ${response.status} ${response.statusText}`);
+    }
 
-    // Process the matches returned by the query.
-    const allMetadata = queryResponse.matches
-      .filter((match: any) => match.metadata)
-      .map((match: any) => ({
-        id: match.id,
-        ...match.metadata
-      }));
+    const data = await response.json();
+    console.log("Received metadata payload:", data);
 
-    // Compute some statistics (optional)
+    // Expect the API to return an object with a result.metadataIndexes array.
+    const metadataIndexes = data?.result?.metadataIndexes || [];
     const stats = {
-      totalEntries: allMetadata.length,
-      uniqueTitles: new Set(allMetadata.map((entry: any) => entry.title).filter(Boolean)).size,
-      metadataFields: Array.from(
-        new Set(allMetadata.flatMap((entry: any) => Object.keys(entry)))
-      )
+      totalIndexes: metadataIndexes.length
     };
 
-    console.log('Final metadata stats:', JSON.stringify(stats, null, 2));
-
     return json({
-      metadata: allMetadata,
+      metadata: metadataIndexes,
       stats,
       timestamp: new Date().toISOString()
     });
   } catch (err) {
-    console.error('Error fetching metadata using query:', err);
+    console.error("Error fetching metadata index:", err);
     throw error(500, {
-      message: 'Failed to fetch metadata',
+      message: 'Failed to fetch metadata index',
       error: err instanceof Error ? err.message : 'Unknown error'
     });
   }
