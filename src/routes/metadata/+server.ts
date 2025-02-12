@@ -23,8 +23,8 @@ export const GET: RequestHandler = async ({ platform, request }) => {
 
   try {
     // Use a dummy vector to retrieve metadata.
-    // Adjust the dimension (512 here) as needed.
-    const dummyVector = Array(512).fill(0);
+    // Adjust the dimension (768 here) as needed.
+    const dummyVector = Array(768).fill(0);
     
     // Update query parameters per the error suggestion:
     // For a topK up to 100, use returnValues=false and returnMetadata='indexed'
