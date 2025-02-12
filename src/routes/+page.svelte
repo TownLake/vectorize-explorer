@@ -22,7 +22,6 @@
         return;
       }
 
-      // Update the results variable with the returned JSON.
       results = await response.json();
     } catch (error) {
       console.error('Error fetching search results:', error);
@@ -34,30 +33,44 @@
   async function handleShowMetadata() {
     showMetadata = !showMetadata;
 
-    // Only fetch metadata when the view is being shown.
     if (showMetadata) {
       isLoadingMetadata = true;
       metadataError = null;
       try {
         const response = await fetch('/metadata');
         if (!response.ok) {
-          const errResp = await response.json();
-          console.error('Metadata endpoint error:', errResp);
-          metadataError = 'Failed to load metadata';
+          // Log additional details: status, status text and raw response text.
+          const responseText = await response.text();
+          console.error(
+            `Metadata endpoint returned error: ${response.status} ${response.statusText}`,
+            responseText
+          );
+          metadataError = `Failed to load metadata (Status: ${response.status} ${response.statusText})`;
           return;
         }
+        
+        // Log the full JSON payload for inspection.
         const data = await response.json();
+        console.log('Received metadata payload:', data);
 
-        // Map the returned metadata entries to our UI-friendly format.
-        // This assumes each entry has an id, a title, and optionally a slug.
-        metadata = data.metadata.map((entry: any) => ({
-          id: entry.id,
-          title: entry.title || 'N/A',
-          url: entry.slug ? `https://blog.samrhea.com${entry.slug}` : '#'
-        }));
+        if (!data.metadata) {
+          console.error('No metadata property in response:', data);
+          metadataError = 'No metadata found in response';
+          return;
+        }
+
+        // Log each metadata entry as it is processed.
+        metadata = data.metadata.map((entry: any) => {
+          console.log('Mapping metadata entry:', entry);
+          return {
+            id: entry.id,
+            title: entry.title || 'N/A',
+            url: entry.slug ? `https://blog.samrhea.com${entry.slug}` : '#'
+          };
+        });
       } catch (error) {
         console.error('Error fetching metadata:', error);
-        metadataError = 'Failed to load metadata';
+        metadataError = 'Failed to load metadata: ' + error.toString();
       } finally {
         isLoadingMetadata = false;
       }
