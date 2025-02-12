@@ -22,12 +22,12 @@ export const GET: RequestHandler = async ({ platform, request }) => {
   }
 
   try {
-    // Use a dummy vector to retrieve metadata.
-    // Adjust the dimension (768 here) as needed.
-    const dummyVector = Array(768).fill(0);
-    
-    // Update query parameters per the error suggestion:
-    // For a topK up to 100, use returnValues=false and returnMetadata='indexed'
+    // Use a normalized dummy vector instead of zeros.
+    const dimension = 768;
+    const dummyVector = Array(dimension).fill(1 / Math.sqrt(dimension));
+    console.log('Using dummy vector:', dummyVector);
+
+    // Update query parameters per the API's suggestion.
     const queryResponse = await env.VECTORIZE.query(dummyVector, {
       topK: 100,
       returnMetadata: 'indexed',
