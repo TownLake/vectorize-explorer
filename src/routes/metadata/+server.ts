@@ -16,7 +16,6 @@ export const GET: RequestHandler = async ({ platform, request }) => {
     throw error(500, { message: 'No environment bindings available' });
   }
 
-  // Instead of checking for VECTORIZE.list, we use query because that's what your binding provides.
   if (typeof env.VECTORIZE.query !== 'function') {
     console.error('VECTORIZE.query is not a function');
     throw error(500, { message: 'Invalid VECTORIZE binding configuration: query method missing' });
@@ -26,9 +25,13 @@ export const GET: RequestHandler = async ({ platform, request }) => {
     // Use a dummy vector to retrieve metadata.
     // Adjust the dimension (512 here) as needed.
     const dummyVector = Array(512).fill(0);
+    
+    // Update query parameters per the error suggestion:
+    // For a topK up to 100, use returnValues=false and returnMetadata='indexed'
     const queryResponse = await env.VECTORIZE.query(dummyVector, {
-      topK: 1000,
-      returnMetadata: 'all'
+      topK: 100,
+      returnMetadata: 'indexed',
+      returnValues: false
     });
 
     console.log('Query response:', JSON.stringify(queryResponse, null, 2));
