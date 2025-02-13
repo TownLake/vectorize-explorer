@@ -1,13 +1,16 @@
 // src/routes/metadata/+server.ts
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-// Import environment variables (ensure these are set as secrets in Cloudflare Pages)
-import { CLOUDFLARE_ACCOUNT_ID, VECTORIZE_INDEX_NAME, CLOUDFLARE_API_KEY } from '$env/static/private';
+import {
+  CLOUDFLARE_ACCOUNT_ID,
+  VECTORIZE_INDEX_NAME,
+  CLOUDFLARE_API_KEY
+} from '$env/static/private';
 
 export const GET: RequestHandler = async ({ fetch }) => {
-  // Validate that required environment variables are available.
+  // Ensure that required environment variables are available.
   if (!CLOUDFLARE_ACCOUNT_ID || !VECTORIZE_INDEX_NAME || !CLOUDFLARE_API_KEY) {
-    throw error(500, 'Server configuration error: Missing environment variables');
+    throw error(500, 'Missing required environment variables');
   }
 
   const accountId = CLOUDFLARE_ACCOUNT_ID;
@@ -20,7 +23,7 @@ export const GET: RequestHandler = async ({ fetch }) => {
   // Create a 768-dimensional zero vector.
   const zeroVector = new Array(768).fill(0);
 
-  // First: Query the index using the zero vector to retrieve a list of vector IDs.
+  // First, query the index using the zero vector to retrieve vector IDs.
   let vectorIds: string[] = [];
   try {
     const res = await fetch(queryUrl, {
@@ -54,7 +57,7 @@ export const GET: RequestHandler = async ({ fetch }) => {
     return json({ metadata: [] });
   }
 
-  // Next: Get metadata for these vector IDs.
+  // Next, retrieve metadata for the given vector IDs.
   let metadataList: any[] = [];
   try {
     const res = await fetch(getByIdsUrl, {
@@ -80,12 +83,6 @@ export const GET: RequestHandler = async ({ fetch }) => {
     throw error(500, 'Failed to retrieve metadata');
   }
 
-  // Format the metadata so the UI has a propertyName and indexType.
-  // Adjust the mapping based on the actual structure of your metadata.
-  const formattedMetadata = metadataList.map((meta: any) => ({
-    propertyName: meta.title || 'N/A',
-    indexType: meta.slug ? 'blog-post' : 'unknown'
-  }));
-
-  return json({ metadata: formattedMetadata });
+  // Return the full metadata objects (e.g., title, category, date, description, etc.).
+  return json({ metadata: metadataList });
 };
