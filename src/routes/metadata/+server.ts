@@ -8,7 +8,7 @@ import {
 } from '$env/static/private';
 
 export const GET: RequestHandler = async ({ fetch }) => {
-  // Validate that the required environment variables are available.
+  // Validate that required environment variables are available.
   if (!CLOUDFLARE_ACCOUNT_ID || !VECTORIZE_INDEX_NAME || !CLOUDFLARE_API_KEY) {
     console.error('Missing required environment variables');
     throw error(500, 'Missing required environment variables');
@@ -58,8 +58,9 @@ export const GET: RequestHandler = async ({ fetch }) => {
     vectorIds = queryData.result.matches.map((match: any) => match.id);
     console.log('Retrieved vector IDs:', vectorIds);
   } catch (err: any) {
+    const errMsg = err?.message || err?.toString() || 'No error message provided';
     console.error('Error during vector query:', err);
-    throw error(500, `Failed to query vector ids: ${err.message}`);
+    throw error(500, `Failed to query vector ids: ${errMsg}`);
   }
 
   if (vectorIds.length === 0) {
@@ -101,8 +102,9 @@ export const GET: RequestHandler = async ({ fetch }) => {
       return item.metadata;
     });
   } catch (err: any) {
+    const errMsg = err?.message || err?.toString() || 'No error message provided';
     console.error('Error during metadata query:', err);
-    throw error(500, `Failed to retrieve metadata: ${err.message}`);
+    throw error(500, `Failed to retrieve metadata: ${errMsg}`);
   }
 
   return json({ metadata: metadataList });
