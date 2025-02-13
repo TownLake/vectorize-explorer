@@ -2,7 +2,7 @@
   let query: string = '';
   let results: { title: string; url: string; score: number | string }[] = [];
   let showMetadata: boolean = false;
-  let metadata: { propertyName: string; indexType: string }[] = [];
+  let metadata: any[] = [];
   let isLoadingMetadata: boolean = false;
   let metadataError: string | null = null;
 
@@ -28,7 +28,7 @@
     }
   }
 
-  // Toggle metadata view and fetch metadata indexes from the endpoint if showing.
+  // Toggle metadata view and fetch metadata indexes from the endpoint.
   async function handleShowMetadata() {
     showMetadata = !showMetadata;
     if (showMetadata) {
@@ -44,7 +44,6 @@
         }
         const data = await response.json();
         console.log('Received metadata payload:', data);
-        // data.metadata is expected to be an array of objects with propertyName and indexType.
         metadata = data.metadata;
       } catch (error) {
         console.error('Error fetching metadata:', error);
@@ -146,15 +145,21 @@
             <table class="w-full">
               <thead>
                 <tr class="border-b border-[#ffb07c]/10">
-                  <th class="py-3 text-left text-white/60">Property Name</th>
-                  <th class="py-3 text-left text-white/60">Index Type</th>
+                  <th class="py-3 text-left text-white/60">Title</th>
+                  <th class="py-3 text-left text-white/60">Category</th>
+                  <th class="py-3 text-left text-white/60">Date</th>
+                  <th class="py-3 text-left text-white/60">Description</th>
+                  <th class="py-3 text-left text-white/60">Slug</th>
                 </tr>
               </thead>
               <tbody>
                 {#each metadata as item, index (index)}
                   <tr class="border-b border-white/10 last:border-b-0 hover:bg-[#3a3f55] transition-colors duration-300">
-                    <td class="py-3 text-white/90">{item.propertyName}</td>
-                    <td class="py-3 text-white/90">{item.indexType}</td>
+                    <td class="py-3 text-white/90">{item.title}</td>
+                    <td class="py-3 text-white/90">{item.category}</td>
+                    <td class="py-3 text-white/90">{item.date}</td>
+                    <td class="py-3 text-white/90">{item.description}</td>
+                    <td class="py-3 text-white/90">{item.slug}</td>
                   </tr>
                 {/each}
               </tbody>
