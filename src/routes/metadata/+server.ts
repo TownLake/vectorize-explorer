@@ -8,8 +8,9 @@ import {
 } from '$env/static/private';
 
 export const GET: RequestHandler = async ({ fetch }) => {
-  // Ensure that required environment variables are available.
+  // Ensure required environment variables are available.
   if (!CLOUDFLARE_ACCOUNT_ID || !VECTORIZE_INDEX_NAME || !CLOUDFLARE_API_KEY) {
+    console.error('Missing required environment variables');
     throw error(500, 'Missing required environment variables');
   }
 
@@ -23,10 +24,11 @@ export const GET: RequestHandler = async ({ fetch }) => {
   // Create a 768-dimensional zero vector.
   const zeroVector = new Array(768).fill(0);
 
-  // First, query the index using the zero vector to retrieve vector IDs.
+  // First: Query the index using the zero vector to retrieve vector IDs.
   let vectorIds: string[] = [];
   try {
-    const res = await fetch(queryUrl, {
+    console.log('Sending vector query to:', queryUrl);
+    const queryResponse = await fetch(queryUrl, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${token}`,
@@ -38,29 +40,29 @@ export const GET: RequestHandler = async ({ fetch }) => {
         filter: {}
       })
     });
-
-    if (!res.ok) {
-      const text = await res.text();
-      console.error('Vector query error:', text);
-      throw error(res.status, 'Vector query failed');
+    if (!queryResponse.ok) {
+      const queryErrorText = await queryResponse.text();
+      console.error('Vector query failed:', queryResponse.status, queryErrorText);
+      throw error(queryResponse.status, `Vector query failed: ${queryResponse.statusText}`);
     }
-
-    const queryData = await res.json();
+    const queryData = await queryResponse.json();
     vectorIds = queryData.result?.matches?.map((match: any) => match.id) || [];
+    console.log('Retrieved vector IDs:', vectorIds);
   } catch (err) {
-    console.error('Error querying vectors:', err);
+    console.error('Error during vector query:', err);
     throw error(500, 'Failed to query vector ids');
   }
 
-  // If no vector IDs are returned, send back an empty metadata array.
   if (vectorIds.length === 0) {
+    console.warn('No vector IDs returned from vector query');
     return json({ metadata: [] });
   }
 
-  // Next, retrieve metadata for the given vector IDs.
+  // Next: Retrieve metadata for the given vector IDs.
   let metadataList: any[] = [];
   try {
-    const res = await fetch(getByIdsUrl, {
+    console.log('Fetching metadata for vector IDs:', vectorIds);
+    const getByIdsResponse = await fetch(getByIdsUrl, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${token}`,
@@ -68,21 +70,18 @@ export const GET: RequestHandler = async ({ fetch }) => {
       },
       body: JSON.stringify({ ids: vectorIds })
     });
-
-    if (!res.ok) {
-      const text = await res.text();
-      console.error('Metadata query error:', text);
-      throw error(res.status, 'Metadata query failed');
+    if (!getByIdsResponse.ok) {
+      const metadataErrorText = await getByIdsResponse.text();
+      console.error('Metadata query failed:', getByIdsResponse.status, metadataErrorText);
+      throw error(getByIdsResponse.status, `Metadata query failed: ${getByIdsResponse.statusText}`);
     }
-
-    const data = await res.json();
-    // Each item in data.result is expected to have a "metadata" property.
+    const data = await getByIdsResponse.json();
+    console.log('Metadata response data:', data);
     metadataList = data.result.map((item: any) => item.metadata);
   } catch (err) {
-    console.error('Error retrieving metadata:', err);
+    console.error('Error during metadata query:', err);
     throw error(500, 'Failed to retrieve metadata');
   }
 
-  // Return the full metadata objects (e.g., title, category, date, description, etc.).
   return json({ metadata: metadataList });
 };
