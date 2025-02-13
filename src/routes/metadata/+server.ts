@@ -1,74 +1,91 @@
+// src/routes/metadata/+server.ts
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
+// Import environment variables (ensure these are set as secrets in Cloudflare Pages)
+import { CLOUDFLARE_ACCOUNT_ID, VECTORIZE_INDEX_NAME, CLOUDFLARE_API_KEY } from '$env/static/private';
 
-export const GET: RequestHandler = async ({ platform }) => {
-  console.log('Metadata endpoint invoked');
-
-  if (!platform) {
-    console.error('Not running in Cloudflare Pages environment');
-    throw error(500, 'Not running in Cloudflare Pages environment');
+export const GET: RequestHandler = async ({ fetch }) => {
+  // Validate that required environment variables are available.
+  if (!CLOUDFLARE_ACCOUNT_ID || !VECTORIZE_INDEX_NAME || !CLOUDFLARE_API_KEY) {
+    throw error(500, 'Server configuration error: Missing environment variables');
   }
 
-  const env = platform.env;
-  if (!env) {
-    console.error('No environment bindings available');
-    throw error(500, 'No environment bindings available');
-  }
+  const accountId = CLOUDFLARE_ACCOUNT_ID;
+  const index = VECTORIZE_INDEX_NAME;
+  const token = CLOUDFLARE_API_KEY;
 
-  // Read required environment variables.
-  const accountId = env.CLOUDFLARE_ACCOUNT_ID;
-  const email = env.CLOUDFLARE_EMAIL;
-  const apiKey = env.CLOUDFLARE_API_KEY;
-  const indexName = env.VECTORIZE_INDEX_NAME;
+  const queryUrl = `https://api.cloudflare.com/client/v4/accounts/${accountId}/vectorize/v2/indexes/${index}/query`;
+  const getByIdsUrl = `https://api.cloudflare.com/client/v4/accounts/${accountId}/vectorize/v2/indexes/${index}/get_by_ids`;
 
-  if (!accountId || !email || !apiKey || !indexName) {
-    console.error('Missing one or more required environment variables');
-    throw error(500, 'Missing one or more required environment variables');
-  }
+  // Create a 768-dimensional zero vector.
+  const zeroVector = new Array(768).fill(0);
 
-  // Construct the Cloudflare API endpoint URL.
-  const url = `https://api.cloudflare.com/client/v4/accounts/${accountId}/vectorize/v2/indexes/${indexName}/metadata_index/list`;
-  console.log('Fetching metadata from:', url);
-
+  // First: Query the index using the zero vector to retrieve a list of vector IDs.
+  let vectorIds: string[] = [];
   try {
-    const response = await fetch(url, {
-      method: 'GET',
+    const res = await fetch(queryUrl, {
+      method: 'POST',
       headers: {
-        "X-Auth-Email": email,
-        "X-Auth-Key": apiKey,
-        "Content-Type": "application/json"
-      }
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        vector: zeroVector,
+        topK: 100,
+        filter: {}
+      })
     });
 
-    console.log("Response status:", response.status, response.statusText);
-
-    if (!response.ok) {
-      const text = await response.text();
-      console.error(`Error fetching metadata index: ${response.status} ${response.statusText} - ${text}`);
-      throw error(500, `Error fetching metadata index: ${response.status} ${response.statusText} - ${text}`);
+    if (!res.ok) {
+      const text = await res.text();
+      console.error('Vector query error:', text);
+      throw error(res.status, 'Vector query failed');
     }
 
-    const data = await response.json();
-    console.log("Received metadata payload:", data);
-
-    // Expecting data.result.metadataIndexes to be an array.
-    const metadataIndexes = data?.result?.metadataIndexes || [];
-    const stats = {
-      totalIndexes: metadataIndexes.length
-    };
-
-    return json({
-      metadata: metadataIndexes,
-      stats,
-      timestamp: new Date().toISOString()
-    });
-  } catch (err: any) {
-    console.error("Error fetching metadata index:", err);
-    // Log full details about the error
-    console.error("Error details:", JSON.stringify(err, null, 2));
-    throw error(500, {
-      message: 'Failed to fetch metadata index',
-      error: err?.message || JSON.stringify(err)
-    });
+    const queryData = await res.json();
+    vectorIds = queryData.result?.matches?.map((match: any) => match.id) || [];
+  } catch (err) {
+    console.error('Error querying vectors:', err);
+    throw error(500, 'Failed to query vector ids');
   }
+
+  // If no vector IDs are returned, send back an empty metadata array.
+  if (vectorIds.length === 0) {
+    return json({ metadata: [] });
+  }
+
+  // Next: Get metadata for these vector IDs.
+  let metadataList: any[] = [];
+  try {
+    const res = await fetch(getByIdsUrl, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ ids: vectorIds })
+    });
+
+    if (!res.ok) {
+      const text = await res.text();
+      console.error('Metadata query error:', text);
+      throw error(res.status, 'Metadata query failed');
+    }
+
+    const data = await res.json();
+    // Each item in data.result is expected to have a "metadata" property.
+    metadataList = data.result.map((item: any) => item.metadata);
+  } catch (err) {
+    console.error('Error retrieving metadata:', err);
+    throw error(500, 'Failed to retrieve metadata');
+  }
+
+  // Format the metadata so the UI has a propertyName and indexType.
+  // Adjust the mapping based on the actual structure of your metadata.
+  const formattedMetadata = metadataList.map((meta: any) => ({
+    propertyName: meta.title || 'N/A',
+    indexType: meta.slug ? 'blog-post' : 'unknown'
+  }));
+
+  return json({ metadata: formattedMetadata });
 };

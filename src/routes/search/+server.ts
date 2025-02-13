@@ -1,91 +1,98 @@
-// src/routes/metadata/+server.ts
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-// Import environment variables (ensure these are set as secrets in Cloudflare Pages)
-import { CLOUDFLARE_ACCOUNT_ID, VECTORIZE_INDEX_NAME, CLOUDFLARE_API_KEY } from '$env/static/private';
 
-export const GET: RequestHandler = async ({ fetch }) => {
-  // Validate that required environment variables are available.
-  if (!CLOUDFLARE_ACCOUNT_ID || !VECTORIZE_INDEX_NAME || !CLOUDFLARE_API_KEY) {
-    throw error(500, 'Server configuration error: Missing environment variables');
-  }
+// Define the environment variables interface
+interface Env {
+    AI: {
+        run: (model: string, params: { text: string }) => Promise<{
+            data: number[][];
+        }>;
+    };
+    VECTORIZE: {
+        query: (
+            vector: number[],
+            options: {
+                topK: number;
+                returnMetadata: string;
+            }
+        ) => Promise<{
+            matches: Array<{
+                metadata?: {
+                    title?: string;
+                    slug?: string;
+                };
+                score?: number;
+            }>;
+        }>;
+    };
+}
 
-  const accountId = CLOUDFLARE_ACCOUNT_ID;
-  const index = VECTORIZE_INDEX_NAME;
-  const token = CLOUDFLARE_API_KEY;
+// Define the search result interface
+interface SearchResult {
+    title: string;
+    url: string;
+    score: string;
+}
 
-  const queryUrl = `https://api.cloudflare.com/client/v4/accounts/${accountId}/vectorize/v2/indexes/${index}/query`;
-  const getByIdsUrl = `https://api.cloudflare.com/client/v4/accounts/${accountId}/vectorize/v2/indexes/${index}/get_by_ids`;
+export const POST: RequestHandler = async ({ request, platform }) => {
+    // Type assertion for platform environment
+    const env = platform?.env as Env;
 
-  // Create a 768-dimensional zero vector.
-  const zeroVector = new Array(768).fill(0);
-
-  // First: Query the index using the zero vector to retrieve a list of vector IDs.
-  let vectorIds: string[] = [];
-  try {
-    const res = await fetch(queryUrl, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        vector: zeroVector,
-        topK: 100,
-        filter: {}
-      })
-    });
-
-    if (!res.ok) {
-      const text = await res.text();
-      console.error('Vector query error:', text);
-      throw error(res.status, 'Vector query failed');
+    if (!env?.AI || !env?.VECTORIZE) {
+        throw error(500, 'Server configuration error: AI or Vectorize not available');
     }
 
-    const queryData = await res.json();
-    vectorIds = queryData.result?.matches?.map((match: any) => match.id) || [];
-  } catch (err) {
-    console.error('Error querying vectors:', err);
-    throw error(500, 'Failed to query vector ids');
-  }
+    try {
+        const { query } = await request.json();
 
-  // If no vector IDs are returned, send back an empty metadata array.
-  if (vectorIds.length === 0) {
-    return json({ metadata: [] });
-  }
+        // Validate input
+        if (!query || typeof query !== 'string') {
+            throw error(400, 'Invalid input: query must be a non-empty string');
+        }
 
-  // Next: Get metadata for these vector IDs.
-  let metadataList: any[] = [];
-  try {
-    const res = await fetch(getByIdsUrl, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({ ids: vectorIds })
-    });
+        // Generate embedding using Workers AI
+        const embeddingResponse = await env.AI.run('@cf/baai/bge-base-en-v1.5', {
+            text: query
+        });
 
-    if (!res.ok) {
-      const text = await res.text();
-      console.error('Metadata query error:', text);
-      throw error(res.status, 'Metadata query failed');
+        if (!embeddingResponse?.data?.[0]) {
+            throw error(500, 'Failed to generate embedding');
+        }
+
+        const queryVector = embeddingResponse.data[0];
+
+        // Query Vectorize DB
+        const matches = await env.VECTORIZE.query(queryVector, {
+            topK: 5,
+            returnMetadata: 'all'
+        });
+
+        if (!matches?.matches) {
+            return json([]);
+        }
+
+        // Process and format results
+        const results: SearchResult[] = matches.matches
+            .filter((match) => match.metadata?.title && match.metadata?.slug)
+            .map((match) => ({
+                title: match.metadata!.title!,
+                url: `https://blog.samrhea.com${match.metadata!.slug!}`,
+                score: match.score?.toFixed(4) ?? 'N/A'
+            }));
+
+        return json(results);
+    } catch (err) {
+        console.error('Search error:', err);
+        
+        // If it's already a SvelteKit error, rethrow it
+        if (err instanceof Error && 'status' in err) {
+            throw err;
+        }
+        
+        // Otherwise, throw a generic error
+        throw error(
+            500,
+            'An error occurred while processing your search request'
+        );
     }
-
-    const data = await res.json();
-    // Each item in data.result is expected to have a "metadata" property.
-    metadataList = data.result.map((item: any) => item.metadata);
-  } catch (err) {
-    console.error('Error retrieving metadata:', err);
-    throw error(500, 'Failed to retrieve metadata');
-  }
-
-  // Format the metadata so the UI has a propertyName and indexType.
-  // Adjust the mapping based on the actual structure of your metadata.
-  const formattedMetadata = metadataList.map((meta: any) => ({
-    propertyName: meta.title || 'N/A',
-    indexType: meta.slug ? 'blog-post' : 'unknown'
-  }));
-
-  return json({ metadata: formattedMetadata });
 };
